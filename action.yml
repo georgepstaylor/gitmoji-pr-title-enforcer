@@ -29,10 +29,9 @@ runs:
       shell: bash
       if: failure()
       run: |
-        PR_NUMBER=${{ github.event.pull_request.number }}
         COMMENT=":x: Invalid gitmoji prefix in PR title. Please use a valid gitmoji prefix."
         GITHUB_TOKEN=${{ inputs.GITHUB_TOKEN }}
-        COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
+        COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
 
         curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST $COMMENT_URL -d "{\"body\":\"$COMMENT\"}"
 
