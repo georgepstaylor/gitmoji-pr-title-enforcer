@@ -1,4 +1,4 @@
-# gitmoji-enforcer
+# gitmoji-pr-title-enforcer
 
 A simple action to enforce the use of gitmoji in PR titles.
 
