@@ -2,6 +2,11 @@
 name: Enforce Pull Request has a valid gitmoji prefix
 description: This action enforces that a pull request title contains a valid gitmoji prefix
 
+inputs:
+    GITHUB_TOKEN:
+        description: 'GitHub token'
+        required: true
+
 runs:
   using: "composite"
   steps:
@@ -26,7 +31,7 @@ runs:
       run: |
         PR_NUMBER=${{ github.event.pull_request.number }}
         COMMENT=":x: Invalid gitmoji prefix in PR title. Please use a valid gitmoji prefix."
-        GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN=${{ inputs.GITHUB_TOKEN }}
         COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
 
         curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST $COMMENT_URL -d "{\"body\":\"$COMMENT\"}"
@@ -37,7 +42,7 @@ runs:
       run: |
         PR_NUMBER=${{ github.event.pull_request.number }}
         COMMENT=":white_check_mark: Valid gitmoji prefix in PR title."
-        GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN=${{ inputs.GITHUB_TOKEN }}
         COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
 
         curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST $COMMENT_URL -d "{\"body\":\"$COMMENT\"}"
