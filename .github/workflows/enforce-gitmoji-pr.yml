@@ -1,0 +1,14 @@
+name: Enforce gitmoji PR
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+permissions:
+  pull-requests: write
+jobs:
+  gitmoji-pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce gitmoji PR title
+        uses: georgepstaylor/gitmoji-pr-title-enforcer@add-test-workflow
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
