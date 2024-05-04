@@ -9,6 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Enforce gitmoji PR title
-        uses: georgepstaylor/gitmoji-pr-title-enforcer@add-test-workflow
+        uses: georgepstaylor/gitmoji-pr-title-enforcer@${{github.sha}}
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
