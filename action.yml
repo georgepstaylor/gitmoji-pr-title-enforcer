@@ -3,9 +3,9 @@ name: Enforce Pull Request has a valid gitmoji prefix
 description: This action enforces that a pull request title contains a valid gitmoji prefix
 
 inputs:
-    GITHUB_TOKEN:
-        description: 'GitHub token'
-        required: true
+  GITHUB_TOKEN:
+    description: "GitHub token"
+    required: true
 
 runs:
   using: "composite"
@@ -14,38 +14,52 @@ runs:
       id: gitmojis
       shell: bash
       run: |
-           curl -s https://gitmoji.dev/api/gitmojis | jq '.gitmojis[].emoji' > gitmojis.txt
+        curl -s https://gitmoji.dev/api/gitmojis | jq '.gitmojis[].emoji' > gitmojis.txt
     - name: Check if PR title has a valid gitmoji prefix
       id: check-gitmoji
       shell: bash
       run: |
-           gitmojis=$(cat gitmojis.txt)
-           gitmoji=$(echo "${{ github.event.pull_request.title }}" | cut -d ' ' -f1)
-           if [[ ! $gitmojis == *"$gitmoji"* ]]; then
-             echo "Invalid gitmoji prefix in PR title. Please use a valid gitmoji prefix."
-             exit 1
-           fi
-    - name: Failure Comment
+        gitmojis=$(cat gitmojis.txt)
+        gitmoji=$(echo "${{ github.event.pull_request.title }}" | cut -d ' ' -f1)
+        if [[ ! $gitmojis == *"$gitmoji"* ]]; then
+          echo "is_valid=false" >> $GITHUB_ENV
+        else
+          echo "is_valid=true" >> $GITHUB_ENV
+        fi
+    - name: Handle PR Comment
       shell: bash
-      if: failure()
-      run: |
-        COMMENT=":x: Invalid gitmoji prefix in PR title. Please use a valid gitmoji prefix."
-        GITHUB_TOKEN=${{ inputs.GITHUB_TOKEN }}
-        COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
-
-        curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST $COMMENT_URL -d "{\"body\":\"$COMMENT\"}"
-
-    - name: Success Comment
-      shell: bash
-      if: success()
       run: |
         PR_NUMBER=${{ github.event.pull_request.number }}
-        COMMENT=":white_check_mark: Valid gitmoji prefix in PR title."
         GITHUB_TOKEN=${{ inputs.GITHUB_TOKEN }}
-        COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
+        API_URL="https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
 
-        curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST $COMMENT_URL -d "{\"body\":\"$COMMENT\"}"
+        # Check for existing comment
+        COMMENTS=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" "${API_URL}")
+        COMMENT_ID=$(echo "$COMMENTS" | jq '.[] | select(.body | startswith("# gitmoji validation")) | .id')
+
+        if [ "${{ env.is_valid }}" == "true" ]; then
+          COMMENT_BODY="# gitmoji validation\n:white_check_mark: Valid gitmoji prefix in PR title."
+        else
+          COMMENT_BODY="# gitmoji validation\n:x: Invalid gitmoji prefix in PR title. Please use a valid gitmoji prefix."
+        fi
+
+        if [ -n "$COMMENT_ID" ]; then
+          # Update existing comment
+          curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+               -X PATCH "${API_URL}/${COMMENT_ID}" \
+               -d "{\"body\":\"${COMMENT_BODY}\"}"
+        else
+          # Create new comment
+          curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+               -X POST "${API_URL}" \
+               -d "{\"body\":\"${COMMENT_BODY}\"}"
+        fi
+
+        # Exit with error if validation failed
+        if [ "${{ env.is_valid }}" != "true" ]; then
+          exit 1
+        fi
 
 branding:
-    icon: 'check-circle'
-    color: 'green'
+  icon: "check-circle"
+  color: "green"
