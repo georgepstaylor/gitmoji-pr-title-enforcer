@@ -3,49 +3,88 @@ name: Enforce Pull Request has a valid gitmoji prefix
 description: This action enforces that a pull request title contains a valid gitmoji prefix
 
 inputs:
-    GITHUB_TOKEN:
-        description: 'GitHub token'
-        required: true
+  GITHUB_TOKEN:
+    description: "GitHub token"
+    required: true
 
 runs:
   using: "composite"
   steps:
+    - name: Install GitHub CLI
+      shell: bash
+      run: |
+        if ! command -v gh &> /dev/null; then
+          if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            sudo apt update
+            sudo apt install gh
+          elif [[ "$OSTYPE" == "darwin"* ]]; then
+            brew install gh
+          fi
+        fi
+        gh auth login --with-token <<< "${{ inputs.GITHUB_TOKEN }}"
+
     - name: Get all Gitmoji's
       id: gitmojis
       shell: bash
       run: |
-           curl -s https://gitmoji.dev/api/gitmojis | jq '.gitmojis[].emoji' > gitmojis.txt
+        curl -s https://gitmoji.dev/api/gitmojis | jq '.gitmojis[].emoji' > gitmojis.txt
+        if [ ! -s gitmojis.txt ]; then
+          echo "::error::Failed to fetch gitmojis from API"
+          exit 1
+        fi
+
     - name: Check if PR title has a valid gitmoji prefix
       id: check-gitmoji
       shell: bash
       run: |
-           gitmojis=$(cat gitmojis.txt)
-           gitmoji=$(echo "${{ github.event.pull_request.title }}" | cut -d ' ' -f1)
-           if [[ ! $gitmojis == *"$gitmoji"* ]]; then
-             echo "Invalid gitmoji prefix in PR title. Please use a valid gitmoji prefix."
-             exit 1
-           fi
-    - name: Failure Comment
+        gitmojis=$(cat gitmojis.txt)
+        gitmoji=$(echo "${{ github.event.pull_request.title }}" | cut -d ' ' -f1)
+        if [[ ! $gitmojis == *"$gitmoji"* ]]; then
+          echo "is_valid=false" >> $GITHUB_ENV
+        else
+          echo "is_valid=true" >> $GITHUB_ENV
+        fi
+
+    - name: Handle PR Comment
       shell: bash
-      if: failure()
       run: |
-        COMMENT=":x: Invalid gitmoji prefix in PR title. Please use a valid gitmoji prefix."
-        GITHUB_TOKEN=${{ inputs.GITHUB_TOKEN }}
-        COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments"
+        if [ -z "${{ github.event.pull_request.number }}" ]; then
+          echo "::error::No pull request number found. This action should only run on pull request events."
+          exit 1
+        fi
 
-        curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST $COMMENT_URL -d "{\"body\":\"$COMMENT\"}"
+        # Create comment content
+        echo "# gitmoji validation" > comment.txt
+        echo "" >> comment.txt
+        
+        if [ "${{ env.is_valid }}" == "true" ]; then
+          echo ":white_check_mark: Valid gitmoji prefix in PR title." >> comment.txt
+        else
+          echo ":x: Invalid gitmoji prefix in PR title. Please use a valid gitmoji prefix." >> comment.txt
+        fi
 
-    - name: Success Comment
-      shell: bash
-      if: success()
-      run: |
-        PR_NUMBER=${{ github.event.pull_request.number }}
-        COMMENT=":white_check_mark: Valid gitmoji prefix in PR title."
-        GITHUB_TOKEN=${{ inputs.GITHUB_TOKEN }}
-        COMMENT_URL="https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments"
+        # Find existing comment
+        existing_comment_url=$(gh api repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
+          --jq '.[] | select(.body | startswith("# gitmoji validation")) | .url' \
+          | head -n1)
 
-        curl -s -H "Authorization: token ${GITHUB_TOKEN}" -X POST $COMMENT_URL -d "{\"body\":\"$COMMENT\"}"
+        # Update or create comment
+        if [ -n "$existing_comment_url" ]; then
+          gh api -X PATCH "$existing_comment_url" -f body="$(cat comment.txt)"
+        else
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file comment.txt
+        fi
+
+        # Clean up
+        rm -f comment.txt
+
+        # Exit with error if validation failed
+        if [ "${{ env.is_valid }}" != "true" ]; then
+          exit 1
+        fi
 
 branding:
-    icon: 'check-circle'
-    color: 'green'
+  icon: "check-circle"
+  color: "green"
