@@ -14,23 +14,31 @@ runs:
       id: gitmojis
       shell: bash
       run: |
-        curl -s https://gitmoji.dev/api/gitmojis | jq '.gitmojis[].emoji' > gitmojis.txt
-        if [ ! -s gitmojis.txt ]; then
+        curl -s https://gitmoji.dev/api/gitmojis | jq '.gitmojis' > gitmojis_all.json
+        if [ ! -s gitmojis_all.json ]; then
           echo "::error::Failed to fetch gitmojis from API"
           exit 1
         fi
+        cat gitmojis_all.json | jq '.[].emoji' > gitmojis.txt
+        cat gitmojis_all.json | jq -r '.[].code' > gitmoji_codes.txt
 
     - name: Check if PR title has a valid gitmoji prefix
       id: check-gitmoji
       shell: bash
       run: |
         gitmojis=$(cat gitmojis.txt)
-        gitmoji=$(echo "${{ github.event.pull_request.title }}" | cut -d ' ' -f1)
-        if [[ ! $gitmojis == *"$gitmoji"* ]]; then
-          echo "is_valid=false" >> $GITHUB_ENV
-        else
-          echo "is_valid=true" >> $GITHUB_ENV
+        gitmoji_codes=$(cat gitmoji_codes.txt)
+        pr_title="${{ github.event.pull_request.title }}"
+        pr_prefix=$(echo "$pr_title" | cut -d ' ' -f1)
+        is_valid=false
+        if [[ $gitmojis == *"$pr_prefix"* ]]; then
+          # Check for unicode gitmoji
+          is_valid=true
+        elif [[ $gitmoji_codes == *"$pr_prefix"* ]]; then
+          # Check for gitmoji code
+          is_valid=true
         fi
+        echo "is_valid=$is_valid" >> $GITHUB_ENV
 
     - name: Handle PR Comment
       shell: bash
