@@ -4,6 +4,7 @@ on:
     types: [opened, edited, reopened, synchronize]
 permissions:
   pull-requests: write
+  issues: write
 jobs:
   gitmoji-pr-title:
     runs-on: ubuntu-latest
