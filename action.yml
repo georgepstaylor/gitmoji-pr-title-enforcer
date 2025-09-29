@@ -26,6 +26,12 @@ runs:
       id: check-gitmoji
       shell: bash
       run: |
+        # Validate required files exist
+        if [[ ! -f gitmojis.txt ]] || [[ ! -f gitmoji_codes.txt ]]; then
+          echo "::error::Required gitmoji files not found. Previous step may have failed."
+          exit 1
+        fi
+        
         gitmojis=$(cat gitmojis.txt)
         gitmoji_codes=$(cat gitmoji_codes.txt)
         pr_title="${{ github.event.pull_request.title }}"
